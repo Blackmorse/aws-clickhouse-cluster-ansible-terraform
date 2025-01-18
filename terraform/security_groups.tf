@@ -1,6 +1,6 @@
 resource "aws_security_group" "allow_outbound_and_ssh_from_public_subnet" {
   name = "allow_outbound"
-  vpc_id = var.vpc_id
+  vpc_id = aws_vpc.infra_vpc.id
 
   tags = {
     Name = "Allow outbound"
@@ -24,5 +24,6 @@ resource "aws_vpc_security_group_ingress_rule" "allow_ssh_ipv4" {
   ip_protocol       = "tcp"
   from_port         = 22
   to_port           = 22
-  cidr_ipv4         = var.public_subnet_cidr
+  cidr_ipv4         = module.bastion.subnet_cidr
 }
+

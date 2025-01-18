@@ -23,23 +23,26 @@ module "bastion" {
   internet_gateway_id = resource.aws_internet_gateway.internet_gateway.id
 }
 
-module "clickhouse" {
-  source = "./modules/clickhouse"
-
-  az     = "eu-north-1a"
-  cidr   = "10.0.10.0/24"
-  vpc_id = aws_vpc.infra_vpc.id
-
-  nat_gateway_id     = module.bastion.nat_gateway_id
-  public_subnet_cidr = module.bastion.subnet_cidr
-  ami                = module.bastion.ami
-  public_key_name    = aws_key_pair.deployer.key_name
-}
-
 module "private_subnets" {
   source = "./modules/private_subnets"  
 
   azs = tolist(toset(concat(var.clickhouse_az, var.zookeeper_az)))
   nat_gateway_id     = module.bastion.nat_gateway_id
   vpc_id = aws_vpc.infra_vpc.id
+}
+
+module "clickhouse" {
+  count           = length(var.clickhouse_az)
+
+  source          = "./modules/clickhouse"
+  az              = var.clickhouse_az[count.index]
+  
+  subnet_id       = module.private_subnets.az_to_cidr_mapping[var.clickhouse_az[count.index]]
+  shards          = 2
+  public_key_name = aws_key_pair.deployer.key_name
+  replica_num     = var.clickhouse_shards
+  ami             = module.bastion.ami
+  instance_type   = "t3.small"
+
+  allow_all_outbound_and_inbound_ssh_from_bastion_security_group = aws_security_group.allow_outbound_and_ssh_from_public_subnet.id
 }

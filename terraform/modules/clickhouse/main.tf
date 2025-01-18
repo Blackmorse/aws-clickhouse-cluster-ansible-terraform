@@ -1,16 +1,19 @@
 resource "aws_instance" "clickhouse_host" {
-  ami = var.ami
+  count = var.shards
 
-  instance_type = "t3.small"
-  subnet_id = aws_subnet.clickhouse_subnet.id
+  
+  ami = var.ami
+  instance_type = var.instance_type
+  subnet_id     = var.subnet_id
 
   key_name = var.public_key_name
   associate_public_ip_address = false
-
-  vpc_security_group_ids = [ aws_security_group.allow_outbound_and_ssh_from_public_subnet.id ]
+  
+  vpc_security_group_ids = [ var.allow_all_outbound_and_inbound_ssh_from_bastion_security_group ]
   tags = {
+    Name = "clickhouse-shard-${count.index}-replica-${var.replica_num}"
     App = "Clickhouse"
-    Shard = 1
-    Replica = 1
+    Shard = count.index
+    Replica = var.replica_num
   }
 }
