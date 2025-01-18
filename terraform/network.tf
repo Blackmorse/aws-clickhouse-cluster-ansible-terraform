@@ -13,4 +13,3 @@ resource "aws_internet_gateway" "internet_gateway" {
     Name = "main_gateway"
   }
 }
-
