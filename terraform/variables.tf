@@ -1,4 +1,4 @@
-variable "pub_key_path" {
+variable "pub_key" {
   type = string
 }
 
@@ -18,3 +18,13 @@ variable "zookeeper_az" {
  variable "clickhouse_shards" {
    type = number
  }
+
+variable "zk_instance_type" {
+  type = string
+  default = "t3.small"
+}
+
+variable "ch_instance_type" {
+  type = string
+  default = "t3.small"
+}

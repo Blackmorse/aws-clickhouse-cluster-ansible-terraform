@@ -8,55 +8,38 @@ terraform {
 }
 
 provider "aws" {
-  region = "eu-north-1"
+  region = var.region
 }
 
 resource "aws_key_pair" "deployer" {
-  key_name   = "hetzner-pub"
-  public_key = file(var.pub_key_path)
+  key_name   = "pub_key"
+  public_key = var.pub_key
 }
 
-module "bastion" {
-  source              = "./modules/bastion"
-  vpc_id              = resource.aws_vpc.infra_vpc.id
-  public_key_name     = aws_key_pair.deployer.key_name
-  internet_gateway_id = resource.aws_internet_gateway.internet_gateway.id
+
+locals {
+  unique_azs = tolist(toset(concat(var.clickhouse_az, var.zookeeper_az)))
+  az_cidr_blocks = [
+    for index in range(length(local.unique_azs)) : "10.0.${index + 1}.0/24"
+  ]
+  az_to_cidr = { for index in range(length(local.unique_azs)) :
+    local.unique_azs[index] => local.az_cidr_blocks[index]
+  }
 }
 
-module "private_subnets" {
-  source = "./modules/private_subnets"
+module "vpc" {
+  source = "terraform-aws-modules/vpc/aws"
 
-  azs            = tolist(toset(concat(var.clickhouse_az, var.zookeeper_az)))
-  nat_gateway_id = module.bastion.nat_gateway_id
-  vpc_id         = aws_vpc.infra_vpc.id
-}
+  name = "clickhouse-vpc"
+  cidr = "10.0.0.0/16"
 
-module "clickhouse" {
-  count = length(var.clickhouse_az)
+  azs             = local.unique_azs
+  private_subnets = local.az_cidr_blocks
+  public_subnets  = ["10.0.0.0/24"]
 
-  source = "./modules/clickhouse"
-  az     = var.clickhouse_az[count.index]
+  create_igw = true
 
-  subnet_id       = module.private_subnets.az_to_cidr_mapping[var.clickhouse_az[count.index]]
-  shards          = 2
-  public_key_name = aws_key_pair.deployer.key_name
-  replica_num     = var.clickhouse_shards
-  ami             = module.bastion.ami
-  instance_type   = "t3.small"
-
-  allow_all_outbound_and_inbound_ssh_from_bastion_security_group = aws_security_group.allow_outbound_and_ssh_from_public_subnet.id
-}
-
-module "zookeeper" {
-  count = length(var.zookeeper_az)
-
-  source = "./modules/zookeeper"
-  az     = var.zookeeper_az[count.index]
-
-  subnet_id       = module.private_subnets.az_to_cidr_mapping[var.zookeeper_az[count.index]]
-  public_key_name = aws_key_pair.deployer.key_name
-  ami             = module.bastion.ami
-  instance_type   = "t3.small"
-
-  allow_all_outbound_and_inbound_ssh_from_bastion_security_group = aws_security_group.allow_outbound_and_ssh_from_public_subnet.id
+  enable_nat_gateway     = true
+  single_nat_gateway     = true
+  one_nat_gateway_per_az = false
 }
